@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Claude Skills - 动态工具过滤可视化</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <!-- 粒子背景 -->
+    <div class="particles" id="particles"></div>
+
+    <!-- 网格背景 -->
+    <div class="grid-bg"></div>
+
+    <!-- API 配置弹窗 -->
+    <div class="modal-overlay" id="configModal">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                    </svg>
+                </div>
+                <h2>API 配置</h2>
+                <p class="modal-subtitle">配置您的 DeepSeek API 以开始使用</p>
+            </div>
+
+            <div class="modal-body">
+                <div class="form-group">
+                    <label for="apiKeyInput">
+                        <span class="label-icon">🔑</span>
+                        API 密钥
+                    </label>
+                    <div class="input-wrapper">
+                        <input type="password" id="apiKeyInput" placeholder="sk-xxxxxxxxxxxxxxxx">
+                        <button class="toggle-password" onclick="togglePassword()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" id="eyeIcon">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                <circle cx="12" cy="12" r="3"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <span class="input-hint">您的 API 密钥将存储在浏览器本地</span>
+                </div>
+
+                <div class="form-group">
+                    <label for="modelSelect">
+                        <span class="label-icon">🤖</span>
+                        模型选择
+                    </label>
+                    <div class="select-wrapper">
+                        <select id="modelSelect">
+                            <option value="deepseek-chat">DeepSeek Chat (快速)</option>
+                            <option value="deepseek-reasoner" selected>DeepSeek Reasoner (推荐)</option>
+                        </select>
+                        <div class="select-arrow">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M6 9l6 6 6-6"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <span class="input-hint">Reasoner 模型提供详细的思考过程</span>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn btn-primary btn-glow" onclick="saveConfig()">
+                    <span>初始化系统</span>
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M5 12h14M12 5l7 7-7 7"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Skill 详情弹窗 -->
+    <div class="modal-overlay" id="skillModal" style="display: none;">
+        <div class="modal skill-modal">
+            <div class="modal-header">
+                <div class="skill-modal-icon" id="skillModalIcon">📊</div>
+                <h2 id="skillModalTitle">技能名称</h2>
+                <button class="modal-close" onclick="closeSkillModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <!-- 技能元信息 -->
+                <div class="skill-meta" id="skillModalMeta">
+                    <span class="skill-meta-item"><span class="meta-label">版本</span> <span id="skillModalVersion">1.0.0</span></span>
+                    <span class="skill-meta-item"><span class="meta-label">作者</span> <span id="skillModalAuthor">-</span></span>
+                </div>
+
+                <!-- 标签 -->
+                <div class="skill-tags" id="skillModalTags"></div>
+
+                <div class="skill-info-card">
+                    <h4>📝 描述</h4>
+                    <p id="skillModalDesc">技能描述...</p>
+                </div>
+                <div class="skill-info-card">
+                    <h4>🔧 可用工具 <span class="tool-count" id="skillToolCount">0</span></h4>
+                    <div class="skill-tools-list" id="skillModalTools">
+                        加载中...
+                    </div>
+                </div>
+                <div class="skill-info-card collapsible">
+                    <h4 onclick="toggleInstructions()">
+                        📋 使用说明
+                        <span class="collapse-icon" id="instructionsCollapseIcon">▼</span>
+                    </h4>
+                    <div class="skill-instructions" id="skillModalInstructions" style="display: none;">
+                        加载中...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 连接状态 -->
+    <div class="connection-status disconnected" id="connectionStatus">
+        <div class="status-pulse"></div>
+        <span class="status-text">未连接</span>
+    </div>
+
+    <!-- 主容器 -->
+    <div class="container">
+        <header>
+            <div class="logo">
+                <div class="logo-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="url(#gradient)" stroke-width="2">
+                        <defs>
+                            <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%" style="stop-color:#00d9ff"/>
+                                <stop offset="100%" style="stop-color:#00ff88"/>
+                            </linearGradient>
+                        </defs>
+                        <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                    </svg>
+                </div>
+                <div class="logo-text">
+                    <h1>Claude Skills</h1>
+                    <span class="logo-subtitle">动态工具过滤引擎</span>
+                </div>
+            </div>
+            <div class="header-stats">
+                <div class="stat-item">
+                    <span class="stat-value" id="headerToolCount">0</span>
+                    <span class="stat-label">活跃工具</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-value" id="headerSkillCount">0</span>
+                    <span class="stat-label">已加载技能</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="main-grid">
+            <!-- 左侧面板 - 状态 -->
+            <div class="panel status-panel glass-effect">
+                <div class="panel-header">
+                    <div class="panel-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+                        </svg>
+                    </div>
+                    <span>系统状态</span>
+                </div>
+
+                <!-- 工具计数 - 大显示 -->
+                <div class="tools-display">
+                    <div class="tools-ring">
+                        <svg viewBox="0 0 100 100">
+                            <circle cx="50" cy="50" r="45" class="ring-bg"/>
+                            <circle cx="50" cy="50" r="45" class="ring-progress" id="toolsRing"/>
+                        </svg>
+                        <div class="tools-number">
+                            <span class="count" id="toolsCount">0</span>
+                            <span class="label">工具</span>
+                        </div>
+                    </div>
+                    <div class="tools-breakdown" id="toolsBreakdown">
+                        <div class="breakdown-item">
+                            <span class="dot loader"></span>
+                            <span>加载器: 2</span>
+                        </div>
+                        <div class="breakdown-item">
+                            <span class="dot skill"></span>
+                            <span>技能工具: 0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 已注册 Skills -->
+                <div class="status-section">
+                    <h4>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
+                        </svg>
+                        已注册技能
+                    </h4>
+                    <div class="skills-grid" id="registeredSkills">
+                        <div class="skill-placeholder">
+                            <div class="placeholder-pulse"></div>
+                            <span>等待初始化...</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 已加载 Skills -->
+                <div class="status-section">
+                    <h4>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        当前激活技能
+                    </h4>
+                    <div class="active-skills" id="loadedSkills">
+                        <div class="empty-state">
+                            <span class="empty-icon">💤</span>
+                            <span>暂无激活的技能</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 流程图 -->
+                <div class="flow-section">
+                    <h4>
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                        </svg>
+                        处理流程
+                    </h4>
+                    <div class="flow-pipeline">
+                        <div class="flow-node" id="step1">
+                            <div class="node-indicator"></div>
+                            <div class="node-content">
+                                <span class="node-title">输入</span>
+                            </div>
+                        </div>
+                        <div class="flow-connector"></div>
+                        <div class="flow-node" id="step2">
+                            <div class="node-indicator"></div>
+                            <div class="node-content">
+                                <span class="node-title">过滤</span>
+                            </div>
+                        </div>
+                        <div class="flow-connector"></div>
+                        <div class="flow-node" id="step3">
+                            <div class="node-indicator"></div>
+                            <div class="node-content">
+                                <span class="node-title">推理</span>
+                            </div>
+                        </div>
+                        <div class="flow-connector"></div>
+                        <div class="flow-node" id="step4">
+                            <div class="node-indicator"></div>
+                            <div class="node-content">
+                                <span class="node-title">执行</span>
+                            </div>
+                        </div>
+                        <div class="flow-connector"></div>
+                        <div class="flow-node" id="step5">
+                            <div class="node-indicator"></div>
+                            <div class="node-content">
+                                <span class="node-title">输出</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <button class="btn btn-init" onclick="showConfigModal()" id="initBtn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                    </svg>
+                    <span>配置并初始化</span>
+                </button>
+            </div>
+
+            <!-- 中间面板 - 对话 -->
+            <div class="panel chat-panel glass-effect">
+                <div class="panel-header">
+                    <div class="panel-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/>
+                        </svg>
+                    </div>
+                    <span>对话窗口</span>
+                    <div class="model-badge" id="modelBadge">
+                        <span class="model-dot"></span>
+                        <span id="modelName">未连接</span>
+                    </div>
+                </div>
+
+                <div class="chat-messages" id="chatMessages">
+                    <div class="welcome-message">
+                        <div class="welcome-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/>
+                            </svg>
+                        </div>
+                        <h3>欢迎使用 Claude Skills</h3>
+                        <p>体验动态工具过滤的强大功能。点击「配置并初始化」开始。</p>
+                        <div class="suggestion-chips">
+                            <span class="chip" onclick="useSuggestion('计算 [85, 92, 78, 95, 88] 的统计数据')">📊 分析数据</span>
+                            <span class="chip" onclick="useSuggestion('从以下文本中提取关键词：人工智能正在改变各行各业')">📝 处理文本</span>
+                            <span class="chip" onclick="useSuggestion('你有哪些可用的工具？')">🔧 查看工具</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="chat-input-area">
+                    <div class="input-container">
+                        <input type="text" class="chat-input" id="chatInput"
+                               placeholder="输入您的消息..."
+                               onkeypress="if(event.key==='Enter') sendMessage()"
+                               disabled>
+                        <button class="btn btn-send" onclick="sendMessage()" id="sendBtn" disabled>
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 右侧面板 - 处理日志 -->
+            <div class="panel events-panel glass-effect">
+                <div class="panel-header">
+                    <div class="panel-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                    </div>
+                    <span>处理日志</span>
+                    <button class="btn-icon" onclick="clearEvents()" title="清空日志">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+                        </svg>
+                    </button>
+                </div>
+
+                <div class="events-list" id="eventsList">
+                    <div class="event-welcome">
+                        <div class="event-welcome-icon">📋</div>
+                        <span>等待连接服务器...</span>
+                        <p class="event-welcome-hint">处理过程将在这里显示</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
